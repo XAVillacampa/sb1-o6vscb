@@ -73,14 +73,14 @@ function NewsSection() {
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">News & Notifications</h2>
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white">Announcements</h2>
           {isAdmin && (
             <button
               onClick={() => setIsModalOpen(true)}
               className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
             >
               <Plus className="h-4 w-4 mr-1" />
-              Add News
+              Add Announcement
             </button>
           )}
         </div>
