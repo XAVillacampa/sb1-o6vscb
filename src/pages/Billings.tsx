@@ -1,13 +1,22 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Search, Upload, Download, Edit, Trash2, CheckCircle, MoreVertical } from 'lucide-react';
-import Modal from '../components/Modal';
-import SearchableSelect from '../components/SearchableSelect';
-import { useForm, Controller } from 'react-hook-form';
-import { Billing, BillingStatus } from '../types';
-import { useBillingStore } from '../store/billing';
-import { useInventoryStore, useAlertStore } from '../store';
-import { useAuthStore } from '../store/auth';
-import BulkBillingModal from '../components/BulkBillingModal';
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import {
+  Plus,
+  Search,
+  Upload,
+  Download,
+  Edit,
+  Trash2,
+  CheckCircle,
+  MoreVertical,
+} from "lucide-react";
+import Modal from "../components/Modal";
+import SearchableSelect from "../components/SearchableSelect";
+import { useForm, Controller } from "react-hook-form";
+import { Billing, BillingStatus } from "../types";
+import { useBillingStore } from "../store/billing";
+import { useInventoryStore, useAlertStore } from "../store";
+import { useAuthStore } from "../store/auth";
+import BulkBillingModal from "../components/BulkBillingModal";
 
 interface BillingFormData {
   invoiceNumber: string;
@@ -21,25 +30,51 @@ function Billings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
   const [editingBilling, setEditingBilling] = useState<Billing | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<BillingStatus | 'all'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<BillingStatus | "all">(
+    "all"
+  );
 
   const { register, handleSubmit, reset, control } = useForm<BillingFormData>();
-  const { billings, addBilling, updateBilling, deleteBilling, markAsPaid } = useBillingStore();
+  const { billings, addBilling, updateBilling, deleteBilling, markAsPaid } =
+    useBillingStore();
   const { products } = useInventoryStore();
   const { user, getAllowedVendorNumbers } = useAuthStore();
   const { setAlert } = useAlertStore();
 
   const allowedVendorNumbers = getAllowedVendorNumbers(user);
-  const canEdit = user?.role !== 'vendor';
+  const canEdit = user?.role !== "vendor";
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpenActionMenu(null);
+      }
+    };
+
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenActionMenu(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [setOpenActionMenu]);
 
   // Get unique vendor numbers from products
   const vendorOptions = useMemo(() => {
-    const uniqueVendors = new Set(products.map(p => p.vendorNumber));
-    return Array.from(uniqueVendors).map(vendor => ({
+    const uniqueVendors = new Set(products.map((p) => p.vendorNumber));
+    return Array.from(uniqueVendors).map((vendor) => ({
       value: vendor,
-      label: vendor
+      label: vendor,
     }));
   }, [products]);
 
@@ -47,22 +82,26 @@ function Billings() {
     return billings
       .filter((billing) => {
         // Filter by vendor access
-        if (user?.role === 'vendor' && !allowedVendorNumbers.includes('ALL')) {
+        if (user?.role === "vendor" && !allowedVendorNumbers.includes("ALL")) {
           if (!allowedVendorNumbers.includes(billing.vendorNumber)) {
             return false;
           }
         }
 
         // Filter by status
-        if (selectedStatus !== 'all' && billing.status !== selectedStatus) {
+        if (selectedStatus !== "all" && billing.status !== selectedStatus) {
           return false;
         }
 
         // Filter by search term
-        const searchString = `${billing.invoiceNumber} ${billing.vendorNumber}`.toLowerCase();
+        const searchString =
+          `${billing.invoiceNumber} ${billing.vendorNumber}`.toLowerCase();
         return searchString.includes(searchTerm.toLowerCase());
       })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
   }, [billings, searchTerm, selectedStatus, user, allowedVendorNumbers]);
 
   const onSubmit = async (data: BillingFormData) => {
@@ -75,39 +114,43 @@ function Billings() {
         updatedAt: new Date(),
       };
       updateBilling(updatedBilling);
-      setAlert('Billing updated successfully', 'success');
+      setAlert("Billing updated successfully", "success");
     } else {
       const newBilling: Billing = {
         id: crypto.randomUUID(),
         ...data,
         amount: Number(data.amount),
-        status: 'pending',
+        status: "pending",
         dueDate: new Date(data.dueDate),
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       addBilling(newBilling);
-      setAlert('Billing created successfully', 'success');
+      setAlert("Billing created successfully", "success");
     }
     closeModal();
   };
 
   const handleBulkImport = (billings: Billing[]) => {
-    billings.forEach(billing => addBilling(billing));
-    setAlert(`Successfully imported ${billings.length} billings`, 'success');
+    billings.forEach((billing) => addBilling(billing));
+    setAlert(`Successfully imported ${billings.length} billings`, "success");
     setIsBulkImportModalOpen(false);
   };
 
   const handleDeleteBilling = (billingId: string) => {
-    if (window.confirm('Are you sure you want to delete this billing? This action cannot be undone.')) {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this billing? This action cannot be undone."
+      )
+    ) {
       deleteBilling(billingId);
-      setAlert('Billing deleted successfully', 'success');
+      setAlert("Billing deleted successfully", "success");
     }
   };
 
   const handleMarkAsPaid = (billingId: string) => {
     markAsPaid(billingId);
-    setAlert('Billing marked as paid', 'success');
+    setAlert("Billing marked as paid", "success");
   };
 
   const openEditModal = (billing: Billing) => {
@@ -116,7 +159,7 @@ function Billings() {
       invoiceNumber: billing.invoiceNumber,
       vendorNumber: billing.vendorNumber,
       amount: billing.amount,
-      dueDate: new Date(billing.dueDate).toISOString().split('T')[0],
+      dueDate: new Date(billing.dueDate).toISOString().split("T")[0],
       notes: billing.notes,
     });
     setIsModalOpen(true);
@@ -131,7 +174,9 @@ function Billings() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Billing</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          Billing
+        </h1>
         {canEdit && (
           <div className="flex space-x-3">
             <button
@@ -165,7 +210,9 @@ function Billings() {
         </div>
         <select
           value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value as BillingStatus | 'all')}
+          onChange={(e) =>
+            setSelectedStatus(e.target.value as BillingStatus | "all")
+          }
           className="block w-40 pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
         >
           <option value="all">All Status</option>
@@ -180,7 +227,7 @@ function Billings() {
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
-        title={editingBilling ? 'Edit Billing' : 'New Billing'}
+        title={editingBilling ? "Edit Billing" : "New Billing"}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -189,7 +236,7 @@ function Billings() {
             </label>
             <input
               type="text"
-              {...register('invoiceNumber', { required: true })}
+              {...register("invoiceNumber", { required: true })}
               className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
             />
           </div>
@@ -221,7 +268,7 @@ function Billings() {
             <input
               type="number"
               step="0.01"
-              {...register('amount', { required: true, min: 0 })}
+              {...register("amount", { required: true, min: 0 })}
               className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
             />
           </div>
@@ -231,7 +278,7 @@ function Billings() {
             </label>
             <input
               type="date"
-              {...register('dueDate', { required: true })}
+              {...register("dueDate", { required: true })}
               className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
             />
           </div>
@@ -240,7 +287,7 @@ function Billings() {
               Notes
             </label>
             <textarea
-              {...register('notes')}
+              {...register("notes")}
               rows={3}
               className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
             />
@@ -257,7 +304,7 @@ function Billings() {
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 rounded-md"
             >
-              {editingBilling ? 'Update' : 'Create'} Billing
+              {editingBilling ? "Update" : "Create"} Billing
             </button>
           </div>
         </form>
@@ -299,7 +346,10 @@ function Billings() {
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredBillings.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td
+                      colSpan={6}
+                      className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400"
+                    >
                       No billings found
                     </td>
                   </tr>
@@ -313,17 +363,19 @@ function Billings() {
                         {billing.vendorNumber}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          billing.status === 'draft'
-                            ? 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                            : billing.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                            : billing.status === 'paid'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : billing.status === 'overdue'
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                        }`}>
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            billing.status === "draft"
+                              ? "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                              : billing.status === "pending"
+                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                              : billing.status === "paid"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              : billing.status === "overdue"
+                              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                              : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                          }`}
+                        >
                           {billing.status}
                         </span>
                       </td>
@@ -336,26 +388,40 @@ function Billings() {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="relative inline-block text-left">
                           <button
-                            onClick={() => setOpenActionMenu(openActionMenu === billing.id ? null : billing.id)}
+                            onClick={() =>
+                              setOpenActionMenu(
+                                openActionMenu === billing.id
+                                  ? null
+                                  : billing.id
+                              )
+                            }
                             className="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
                           >
                             <MoreVertical className="h-5 w-5" />
                           </button>
-
-                          {openActionMenu === billing.id && (
-                            <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                              <div className="py-1" role="menu">
-                                <button
-                                  onClick={() => {
-                                    window.open(`/api/billings/${billing.id}/download`, '_blank');
-                                    setOpenActionMenu(null);
-                                  }}
-                                  className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left"
-                                >
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Download PDF
-                                </button>
-                                {canEdit && billing.status !== 'paid' && billing.status !== 'cancelled' && (
+                        </div>
+                        {openActionMenu === billing.id && (
+                          <div
+                            ref={menuRef}
+                            className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10"
+                          >
+                            <div className="py-1" role="menu">
+                              <button
+                                onClick={() => {
+                                  window.open(
+                                    `/api/billings/${billing.id}/download`,
+                                    "_blank"
+                                  );
+                                  setOpenActionMenu(null);
+                                }}
+                                className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download PDF
+                              </button>
+                              {canEdit &&
+                                billing.status !== "paid" &&
+                                billing.status !== "cancelled" && (
                                   <>
                                     <button
                                       onClick={() => {
@@ -389,10 +455,9 @@ function Billings() {
                                     </button>
                                   </>
                                 )}
-                              </div>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
